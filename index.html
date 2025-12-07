@@ -100,30 +100,26 @@
             transition: background-color 0.2s;
         }
 
-        /* Пустые клетки (дни прошлого месяца) */
         .day.empty { cursor: default; }
 
-        /* Обычный день */
         .day:not(.empty) { background-color: #2c2c2e; }
         .day:not(.empty):active { transform: scale(0.92); }
 
-        /* День с заметкой */
         .day.has-note {
             border: 1.5px solid var(--success-color);
             color: var(--success-color);
         }
 
-        /* Текущий день (Сегодня) */
         .day.today {
             background-color: var(--primary-color);
             color: white;
-            border: none; /* Убираем рамку, если она была */
+            border: none;
         }
-        /* Если сегодня есть заметка, делаем белый кружок внутри или меняем стиль */
+
         .day.today.has-note {
             background-color: var(--primary-color);
             color: white;
-            box-shadow: inset 0 0 0 2px var(--success-color); /* Внутренняя обводка */
+            box-shadow: inset 0 0 0 2px var(--success-color);
             border: none;
         }
 
@@ -169,7 +165,9 @@
             margin-top: 0;
             margin-bottom: 16px;
             text-align: center;
-            font-weight: 600;
+            font-weight: 700;
+            font-size: 18px;
+            color: var(--text-primary);
         }
 
         textarea {
@@ -252,21 +250,16 @@
         const tg = window.Telegram.WebApp;
         tg.expand();
 
-        // Состояние
         let workoutData = {};
         let selectedDateKey = null;
-        
-        // Переменная для навигации (текущий отображаемый месяц)
         let viewDate = new Date(); 
 
-        // DOM элементы
         const calendarEl = document.getElementById('calendar');
         const modal = document.getElementById('noteModal');
         const noteInput = document.getElementById('noteInput');
         const statusEl = document.getElementById('status');
         const monthTitle = document.getElementById('monthTitle');
 
-        // === API Функции (без изменений логики) ===
         async function loadData() {
             statusEl.innerText = "Синхронизация...";
             try {
@@ -304,8 +297,6 @@
             }
         }
 
-        // === Логика Календаря ===
-
         function changeMonth(offset) {
             viewDate.setMonth(viewDate.getMonth() + offset);
             renderCalendar();
@@ -318,27 +309,20 @@
             const month = viewDate.getMonth();
             const today = new Date();
 
-            // Установка заголовка
             const monthName = viewDate.toLocaleString('ru-RU', { month: 'long', year: 'numeric' });
             monthTitle.innerText = monthName.charAt(0).toUpperCase() + monthName.slice(1);
 
-            // Вычисляем первый день месяца и количество дней
-            // 0 - Воскресенье, 1 - Понедельник ...
             let firstDayIndex = new Date(year, month, 1).getDay();
-            // Корректируем, чтобы неделя начиналась с Понедельника (для СНГ)
-            // Пн(1)->0, Вт(2)->1 ... Вс(0)->6
             firstDayIndex = firstDayIndex === 0 ? 6 : firstDayIndex - 1;
 
             const daysInMonth = new Date(year, month + 1, 0).getDate();
 
-            // 1. Добавляем пустые ячейки перед началом месяца
             for (let i = 0; i < firstDayIndex; i++) {
                 const emptyCell = document.createElement('div');
                 emptyCell.className = 'day empty';
                 calendarEl.appendChild(emptyCell);
             }
 
-            // 2. Рисуем дни месяца
             for (let i = 1; i <= daysInMonth; i++) {
                 const dayEl = document.createElement('div');
                 dayEl.className = 'day';
@@ -346,12 +330,10 @@
 
                 const dateKey = `${year}-${String(month + 1).padStart(2, '0')}-${String(i).padStart(2, '0')}`;
 
-                // Проверка на наличие заметки
                 if (workoutData[dateKey]) {
                     dayEl.classList.add('has-note');
                 }
 
-                // Проверка на "Сегодня"
                 if (i === today.getDate() && month === today.getMonth() && year === today.getFullYear()) {
                     dayEl.classList.add('today');
                 }
@@ -361,16 +343,27 @@
             }
         }
 
-        // === Модальное окно ===
         function openModal(dateKey, dayNum, monthStr) {
             selectedDateKey = dateKey;
-            // Убираем год из заголовка для краткости в модальном окне
+            
+            // Получаем дату для определения дня недели
+            // Парсим вручную YYYY-MM-DD чтобы избежать сдвигов часовых поясов
+            const [y, m, d] = dateKey.split('-').map(Number);
+            const dateObj = new Date(y, m - 1, d);
+            
+            // Получаем день недели (например "понедельник")
+            const weekDay = dateObj.toLocaleString('ru-RU', { weekday: 'long' });
+            // Делаем первую букву заглавной
+            const weekDayCap = weekDay.charAt(0).toUpperCase() + weekDay.slice(1);
+            
             const shortMonth = monthStr.split(' ')[0]; 
-            document.getElementById('modalDateTitle').innerText = `${dayNum} ${shortMonth}`;
+            
+            // Формируем заголовок: "Воскресенье, 7 Декабря"
+            document.getElementById('modalDateTitle').innerText = `${weekDayCap}, ${dayNum} ${shortMonth}`;
+            
             noteInput.value = workoutData[dateKey] || '';
             
             modal.style.display = 'flex';
-            // Небольшая задержка для анимации opacity
             setTimeout(() => modal.classList.add('visible'), 10);
             noteInput.focus();
         }
@@ -379,7 +372,7 @@
             modal.classList.remove('visible');
             setTimeout(() => {
                 modal.style.display = 'none';
-            }, 300); // Ждем окончания анимации
+            }, 300);
         }
 
         document.getElementById('closeBtn').onclick = closeModal;
@@ -401,7 +394,6 @@
             if (event.target == modal) closeModal();
         }
 
-        // === Старт ===
         async function init() {
             await loadData();
             renderCalendar();
