@@ -2,223 +2,244 @@
 <html lang="ru">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Workout Calendar</title>
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <style>
         :root {
-            --bg-color: #000000;
-            --surface-color: #1c1c1e;
-            --primary-color: #0a84ff;
-            --text-primary: #ffffff;
-            --text-secondary: #8e8e93;
-            --success-color: #30d158;
-            --today-bg: rgba(10, 132, 255, 0.2);
-            --border-radius: 12px;
+            --bg-color: #1c1c1e;
+            --card-bg: #2c2c2e;
+            --text-color: #ffffff;
+            --accent-color: #007aff;
+            --day-active: #3a3a3c;
+            --day-has-note: #30d158;
+            --btn-hover: #3a3a3c;
+            --weekday-color: #8e8e93;
         }
 
         body {
-            font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
             background-color: var(--bg-color);
-            color: var(--text-primary);
+            color: var(--text-color);
             margin: 0;
-            padding: 16px;
+            padding: 15px;
+            user-select: none;
             -webkit-tap-highlight-color: transparent;
         }
 
-        /* --- Шапка с навигацией --- */
-        .header {
+        /* --- Навигация --- */
+        .header-wrapper {
             display: flex;
+            justify-content: center;
             align-items: center;
-            justify-content: space-between;
             margin-bottom: 20px;
-            padding: 0 8px;
+            position: relative;
         }
 
-        .header h2 {
+        .header-nav {
+            display: flex;
+            align-items: center;
+            gap: 5px; /* Кнопки близко к названию */
+            background: var(--card-bg);
+            padding: 5px 10px;
+            border-radius: 12px;
+        }
+
+        .header-nav h2 {
             margin: 0;
-            font-size: 20px;
-            font-weight: 600;
+            font-size: 1.1rem;
             text-transform: capitalize;
+            text-align: center;
+            min-width: 120px; /* Чтобы не дергалось при смене месяца */
         }
 
         .nav-btn {
-            background: var(--surface-color);
+            background: none;
             border: none;
-            color: var(--primary-color);
-            width: 36px;
-            height: 36px;
-            border-radius: 50%;
+            color: var(--accent-color);
+            font-size: 1.4rem;
+            cursor: pointer;
+            padding: 5px 10px;
+            border-radius: 8px;
             display: flex;
             align-items: center;
             justify-content: center;
-            font-size: 18px;
-            cursor: pointer;
-            transition: opacity 0.2s;
+        }
+        
+        /* Кнопка года (отдельная слева в группе) */
+        .year-btn {
+            font-size: 1rem;
+            font-weight: 600;
+            color: var(--weekday-color);
+            margin-right: 5px;
         }
 
-        .nav-btn:active { opacity: 0.6; }
+        .nav-btn:active { background-color: var(--btn-hover); }
 
-        /* --- Сетка календаря --- */
-        .calendar-wrapper {
-            background-color: var(--surface-color);
-            border-radius: var(--border-radius);
-            padding: 16px;
-            box-shadow: 0 4px 12px rgba(0,0,0,0.3);
-        }
-
+        /* --- Дни недели --- */
         .weekdays {
             display: grid;
             grid-template-columns: repeat(7, 1fr);
-            margin-bottom: 12px;
+            gap: 6px;
+            margin-bottom: 5px;
             text-align: center;
         }
-
+        
         .weekday {
-            font-size: 13px;
-            color: var(--text-secondary);
+            color: var(--weekday-color);
+            font-size: 0.8rem;
             font-weight: 500;
         }
 
+        /* --- Сетка календаря --- */
         .calendar-grid {
             display: grid;
             grid-template-columns: repeat(7, 1fr);
-            gap: 8px;
+            gap: 6px;
+            margin-bottom: 20px;
         }
 
         .day {
+            background-color: var(--card-bg);
             aspect-ratio: 1;
             display: flex;
             align-items: center;
             justify-content: center;
             border-radius: 8px;
-            font-weight: 500;
-            font-size: 16px;
             cursor: pointer;
+            font-weight: bold;
+            font-size: 0.9rem;
             position: relative;
-            background-color: transparent;
-            transition: background-color 0.2s;
         }
 
-        .day.empty { cursor: default; }
-
-        .day:not(.empty) { background-color: #2c2c2e; }
-        .day:not(.empty):active { transform: scale(0.92); }
-
-        .day.has-note {
-            border: 1.5px solid var(--success-color);
-            color: var(--success-color);
+        .day.empty {
+            background-color: transparent;
+            cursor: default;
         }
 
         .day.today {
-            background-color: var(--primary-color);
-            color: white;
-            border: none;
+            background-color: #48484a;
+            border: 1px solid #666;
         }
 
-        .day.today.has-note {
-            background-color: var(--primary-color);
-            color: white;
-            box-shadow: inset 0 0 0 2px var(--success-color);
-            border: none;
+        .day.has-note {
+            border: 2px solid var(--day-has-note);
+            color: var(--day-has-note);
         }
 
-        /* --- Статус бар --- */
-        .loader {
+        .day:active:not(.empty) { transform: scale(0.95); }
+
+        /* --- Вид Года (список месяцев) --- */
+        .year-view {
+            display: none; /* Скрыто по умолчанию */
+            grid-template-columns: repeat(3, 1fr);
+            gap: 10px;
+        }
+
+        .month-card {
+            background-color: var(--card-bg);
+            padding: 15px 5px;
+            border-radius: 10px;
             text-align: center;
-            color: var(--text-secondary);
-            font-size: 13px;
-            margin-bottom: 12px;
-            height: 20px;
+            font-weight: 600;
+            font-size: 0.9rem;
+            cursor: pointer;
+            text-transform: capitalize;
         }
+
+        .month-card.current {
+            border: 1px solid var(--accent-color);
+            color: var(--accent-color);
+        }
+
+        .month-card:active { transform: scale(0.95); background: var(--btn-hover); }
 
         /* --- Модальное окно --- */
         #noteModal {
             display: none;
             position: fixed;
             top: 0; left: 0; right: 0; bottom: 0;
-            background: rgba(0,0,0,0.6);
-            backdrop-filter: blur(5px);
+            background: rgba(0,0,0,0.8);
             align-items: center;
             justify-content: center;
-            z-index: 1000;
-            opacity: 0;
-            transition: opacity 0.3s ease;
+            z-index: 100;
+            backdrop-filter: blur(2px);
         }
-
-        #noteModal.visible { opacity: 1; }
 
         .modal-content {
-            background: #252528;
-            padding: 24px;
-            border-radius: 20px;
+            background: var(--card-bg);
+            padding: 20px;
+            border-radius: 14px;
             width: 85%;
-            max-width: 340px;
-            box-shadow: 0 10px 40px rgba(0,0,0,0.5);
-            transform: scale(0.9);
-            transition: transform 0.2s ease;
+            max-width: 320px;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.5);
+        }
+
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
         }
         
-        #noteModal.visible .modal-content { transform: scale(1); }
-
-        .modal-content h3 {
-            margin-top: 0;
-            margin-bottom: 16px;
-            text-align: center;
-            font-weight: 700;
-            font-size: 18px;
-            color: var(--text-primary);
-        }
+        .modal-header h3 { margin: 0; font-size: 1.1rem; }
 
         textarea {
             width: 100%;
-            height: 140px;
+            height: 120px;
             background: #1c1c1e;
-            color: white;
+            color: #fff;
             border: 1px solid #3a3a3c;
-            border-radius: 12px;
+            border-radius: 10px;
             padding: 12px;
-            margin-bottom: 16px;
+            margin-bottom: 15px;
             resize: none;
             font-size: 16px;
             box-sizing: border-box;
             outline: none;
         }
-        
-        textarea:focus { border-color: var(--primary-color); }
 
-        .modal-buttons { display: flex; gap: 10px; }
+        textarea:focus { border-color: var(--accent-color); }
 
-        button {
+        .btn-group { display: flex; gap: 10px; }
+
+        button.action-btn {
             flex: 1;
-            padding: 14px;
+            padding: 12px;
             border: none;
-            border-radius: 12px;
+            border-radius: 10px;
             font-size: 16px;
             font-weight: 600;
             cursor: pointer;
         }
 
-        #saveBtn { background-color: var(--primary-color); color: white; }
-        #closeBtn { background-color: #3a3a3c; color: #ff453a; }
+        #saveBtn { background-color: var(--accent-color); color: white; }
+        #closeBtn { background-color: #3a3a3c; color: #ff3b30; }
 
+        .loader { 
+            text-align: center; 
+            color: #888; 
+            font-size: 0.8rem; 
+            height: 20px; 
+            margin-bottom: 5px;
+        }
     </style>
 </head>
 <body>
 
-    <div id="status" class="loader">Инициализация...</div>
-
-    <div class="header">
-        <button class="nav-btn" onclick="changeMonth(-1)">
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>
-        </button>
-        <h2 id="monthTitle">...</h2>
-        <button class="nav-btn" onclick="changeMonth(1)">
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18l6-6-6-6"/></svg>
-        </button>
+    <div class="header-wrapper">
+        <div class="header-nav">
+            <button class="nav-btn year-btn" onclick="toggleViewMode()" id="yearBtn">2024</button>
+            
+            <button class="nav-btn" onclick="changeMonth(-1)">&#10094;</button> 
+            <h2 id="monthTitle" onclick="toggleViewMode()">...</h2>
+            <button class="nav-btn" onclick="changeMonth(1)">&#10095;</button> 
+        </div>
     </div>
 
-    <div class="calendar-wrapper">
+    <div id="status" class="loader">Загрузка...</div>
+
+    <div id="calendarContainer">
         <div class="weekdays">
             <div class="weekday">Пн</div>
             <div class="weekday">Вт</div>
@@ -231,13 +252,17 @@
         <div class="calendar-grid" id="calendar"></div>
     </div>
 
+    <div id="yearView" class="year-view"></div>
+
     <div id="noteModal">
         <div class="modal-content">
-            <h3 id="modalDateTitle">Дата</h3>
+            <div class="modal-header">
+                <h3 id="modalDateTitle">Дата</h3>
+            </div>
             <textarea id="noteInput" placeholder="Упражнение, вес, повторы..."></textarea>
-            <div class="modal-buttons">
-                <button id="closeBtn">Отмена</button>
-                <button id="saveBtn">ОК</button>
+            <div class="btn-group">
+                <button id="closeBtn" class="action-btn">Отмена</button>
+                <button id="saveBtn" class="action-btn">Сохранить</button>
             </div>
         </div>
     </div>
@@ -246,22 +271,31 @@
         // --- КОНФИГУРАЦИЯ ---
         const DOC_ID = '57319602ea8e41138fb868b026aadc79';
         const API_URL = `https://api.jsoneditoronline.org/v2/docs/${DOC_ID}/data`;
+        // --------------------
 
         const tg = window.Telegram.WebApp;
-        tg.expand();
+        tg.expand(); 
 
+        // --- Состояние приложения ---
         let workoutData = {};
-        let selectedDateKey = null;
-        let viewDate = new Date(); 
+        let displayedDate = new Date(); 
+        let selectedDateKey = null;     
+        let isYearView = false; // Флаг режима просмотра
 
+        // Элементы
         const calendarEl = document.getElementById('calendar');
+        const yearViewEl = document.getElementById('yearView');
+        const calendarContainer = document.getElementById('calendarContainer');
         const modal = document.getElementById('noteModal');
         const noteInput = document.getElementById('noteInput');
         const statusEl = document.getElementById('status');
         const monthTitle = document.getElementById('monthTitle');
+        const yearBtn = document.getElementById('yearBtn');
+
+        // --- 1. Работа с данными ---
 
         async function loadData() {
-            statusEl.innerText = "Синхронизация...";
+            statusEl.innerText = "Обновление...";
             try {
                 const response = await fetch(API_URL);
                 if (response.ok) {
@@ -270,11 +304,11 @@
                     statusEl.innerText = "";
                 } else {
                     workoutData = {};
-                    statusEl.innerText = "Готов к работе";
+                    statusEl.innerText = "";
                 }
             } catch (error) {
                 console.error(error);
-                statusEl.innerText = "Оффлайн режим";
+                statusEl.innerText = "Офлайн режим";
             }
         }
 
@@ -287,92 +321,143 @@
                     body: JSON.stringify(workoutData)
                 });
                 if (response.ok) {
-                    statusEl.innerText = "Сохранено";
+                    statusEl.innerText = "Сохранено ✅";
                     setTimeout(() => statusEl.innerText = "", 2000);
                 } else {
-                    statusEl.innerText = "Ошибка сохранения";
+                    statusEl.innerText = "Ошибка сервера ❌";
                 }
             } catch (error) {
-                statusEl.innerText = "Ошибка сети";
+                statusEl.innerText = "Ошибка сети ❌";
             }
         }
 
+        // --- 2. Логика календаря ---
+
         function changeMonth(offset) {
-            viewDate.setMonth(viewDate.getMonth() + offset);
-            renderCalendar();
+            if (isYearView) {
+                // В режиме года меняем год
+                displayedDate.setFullYear(displayedDate.getFullYear() + offset);
+            } else {
+                // В обычном режиме меняем месяц
+                displayedDate.setMonth(displayedDate.getMonth() + offset);
+            }
+            render();
+        }
+
+        function toggleViewMode() {
+            isYearView = !isYearView;
+            render();
+        }
+
+        function selectMonth(monthIndex) {
+            displayedDate.setMonth(monthIndex);
+            isYearView = false;
+            render();
+        }
+
+        function render() {
+            const year = displayedDate.getFullYear();
+            yearBtn.innerText = year; // Обновляем кнопку с годом
+
+            if (isYearView) {
+                // Рендер режима года
+                calendarContainer.style.display = 'none';
+                yearViewEl.style.display = 'grid';
+                monthTitle.innerText = "Выберите месяц";
+                renderYearView();
+            } else {
+                // Рендер режима месяца
+                calendarContainer.style.display = 'block';
+                yearViewEl.style.display = 'none';
+                
+                const monthName = displayedDate.toLocaleString('ru-RU', { month: 'long' });
+                monthTitle.innerText = monthName.charAt(0).toUpperCase() + monthName.slice(1);
+                renderCalendar();
+            }
+        }
+
+        function renderYearView() {
+            yearViewEl.innerHTML = '';
+            const currentMonth = new Date().getMonth();
+            const currentYear = new Date().getFullYear();
+            const displayYear = displayedDate.getFullYear();
+
+            for (let i = 0; i < 12; i++) {
+                const monthDiv = document.createElement('div');
+                monthDiv.className = 'month-card';
+                // Получаем название месяца
+                const name = new Date(displayYear, i).toLocaleString('ru-RU', { month: 'long' });
+                monthDiv.innerText = name;
+
+                if (i === currentMonth && displayYear === currentYear) {
+                    monthDiv.classList.add('current');
+                }
+
+                monthDiv.onclick = () => selectMonth(i);
+                yearViewEl.appendChild(monthDiv);
+            }
         }
 
         function renderCalendar() {
             calendarEl.innerHTML = '';
             
-            const year = viewDate.getFullYear();
-            const month = viewDate.getMonth();
+            const year = displayedDate.getFullYear();
+            const month = displayedDate.getMonth();
+            
+            // Сколько дней в месяце
+            const daysInMonth = new Date(year, month + 1, 0).getDate();
+            
+            // Определяем день недели 1-го числа (0 - пн, 6 - вс для корректного отображения)
+            let firstDayIndex = new Date(year, month, 1).getDay();
+            // JS getDay(): 0 = Вс, 1 = Пн. Нам нужно: 0 = Пн ... 6 = Вс
+            firstDayIndex = (firstDayIndex === 0) ? 6 : firstDayIndex - 1;
+
             const today = new Date();
 
-            const monthName = viewDate.toLocaleString('ru-RU', { month: 'long', year: 'numeric' });
-            monthTitle.innerText = monthName.charAt(0).toUpperCase() + monthName.slice(1);
-
-            let firstDayIndex = new Date(year, month, 1).getDay();
-            firstDayIndex = firstDayIndex === 0 ? 6 : firstDayIndex - 1;
-
-            const daysInMonth = new Date(year, month + 1, 0).getDate();
-
+            // Добавляем пустые ячейки до 1-го числа
             for (let i = 0; i < firstDayIndex; i++) {
-                const emptyCell = document.createElement('div');
-                emptyCell.className = 'day empty';
-                calendarEl.appendChild(emptyCell);
+                const emptyEl = document.createElement('div');
+                emptyEl.className = 'day empty';
+                calendarEl.appendChild(emptyEl);
             }
 
+            // Рисуем дни
             for (let i = 1; i <= daysInMonth; i++) {
                 const dayEl = document.createElement('div');
                 dayEl.className = 'day';
                 dayEl.innerText = i;
-
+                
                 const dateKey = `${year}-${String(month + 1).padStart(2, '0')}-${String(i).padStart(2, '0')}`;
-
+                
                 if (workoutData[dateKey]) {
                     dayEl.classList.add('has-note');
                 }
 
-                if (i === today.getDate() && month === today.getMonth() && year === today.getFullYear()) {
+                if (year === today.getFullYear() && month === today.getMonth() && i === today.getDate()) {
                     dayEl.classList.add('today');
                 }
 
-                dayEl.onclick = () => openModal(dateKey, i, monthName);
+                dayEl.onclick = () => openModal(dateKey, i);
                 calendarEl.appendChild(dayEl);
             }
         }
 
-        function openModal(dateKey, dayNum, monthStr) {
+        // --- 3. Модальное окно ---
+
+        function openModal(dateKey, dayNum) {
             selectedDateKey = dateKey;
-            
-            // Получаем дату для определения дня недели
-            // Парсим вручную YYYY-MM-DD чтобы избежать сдвигов часовых поясов
-            const [y, m, d] = dateKey.split('-').map(Number);
-            const dateObj = new Date(y, m - 1, d);
-            
-            // Получаем день недели (например "понедельник")
-            const weekDay = dateObj.toLocaleString('ru-RU', { weekday: 'long' });
-            // Делаем первую букву заглавной
-            const weekDayCap = weekDay.charAt(0).toUpperCase() + weekDay.slice(1);
-            
-            const shortMonth = monthStr.split(' ')[0]; 
-            
-            // Формируем заголовок: "Воскресенье, 7 Декабря"
-            document.getElementById('modalDateTitle').innerText = `${weekDayCap}, ${dayNum} ${shortMonth}`;
+            const [y, m, d] = dateKey.split('-');
+            document.getElementById('modalDateTitle').innerText = `${d}.${m}.${y}`;
             
             noteInput.value = workoutData[dateKey] || '';
-            
             modal.style.display = 'flex';
-            setTimeout(() => modal.classList.add('visible'), 10);
-            noteInput.focus();
+            
+            setTimeout(() => noteInput.focus(), 100);
         }
 
         function closeModal() {
-            modal.classList.remove('visible');
-            setTimeout(() => {
-                modal.style.display = 'none';
-            }, 300);
+            modal.style.display = 'none';
+            noteInput.blur();
         }
 
         document.getElementById('closeBtn').onclick = closeModal;
@@ -384,9 +469,8 @@
             } else {
                 delete workoutData[selectedDateKey];
             }
-            
             closeModal();
-            renderCalendar(); 
+            render(); // Обновить точки
             await saveData();
         };
 
@@ -394,9 +478,11 @@
             if (event.target == modal) closeModal();
         }
 
+        // --- Запуск ---
         async function init() {
-            await loadData();
-            renderCalendar();
+            render(); // Рисуем интерфейс
+            await loadData(); // Грузим данные
+            render(); // Перерисовываем с данными
         }
 
         init();
