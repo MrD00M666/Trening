@@ -13,6 +13,7 @@
             --accent-color: #007aff;
             --day-active: #3a3a3c;
             --day-has-note: #30d158;
+            --danger: #ff3b30;
         }
 
         body {
@@ -21,10 +22,12 @@
             color: var(--text-color);
             margin: 0;
             padding: 20px;
+            box-sizing: border-box;
         }
 
         h2 { text-align: center; margin-bottom: 20px; }
 
+        /* Сетка календаря */
         .calendar-grid {
             display: grid;
             grid-template-columns: repeat(7, 1fr);
@@ -42,6 +45,7 @@
             cursor: pointer;
             position: relative;
             font-weight: bold;
+            font-size: 14px;
         }
 
         .day.has-note {
@@ -49,38 +53,24 @@
             color: var(--day-has-note);
         }
 
-        .day:active { transform: scale(0.95); }
-
-        /* Модальное окно */
-        #noteModal {
-            display: none;
-            position: fixed;
-            top: 0; left: 0; right: 0; bottom: 0;
-            background: rgba(0,0,0,0.8);
-            align-items: center;
-            justify-content: center;
-            z-index: 100;
+        .day.today {
+            background-color: var(--accent-color);
+            color: white;
         }
 
-        .modal-content {
-            background: var(--card-bg);
-            padding: 20px;
-            border-radius: 12px;
-            width: 80%;
-            max-width: 300px;
-        }
-
-        textarea {
+        /* Общие стили форм */
+        textarea, input {
             width: 100%;
-            height: 100px;
             background: #1c1c1e;
             color: #fff;
             border: 1px solid #444;
             border-radius: 8px;
             padding: 10px;
+            box-sizing: border-box;
             margin-bottom: 10px;
-            resize: none;
         }
+        
+        textarea { height: 100px; resize: none; }
 
         button {
             width: 100%;
@@ -90,170 +80,268 @@
             font-weight: bold;
             cursor: pointer;
             margin-top: 5px;
+            font-size: 16px;
         }
 
-        #saveBtn { background-color: var(--accent-color); color: white; }
-        #closeBtn { background-color: transparent; color: #ff3b30; }
+        .btn-primary { background-color: var(--accent-color); color: white; }
+        .btn-text { background-color: transparent; color: var(--danger); }
+        .btn-secondary { background-color: var(--card-bg); color: white; margin-top: 20px;}
+
+        /* Модальные окна */
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(0,0,0,0.9);
+            align-items: center;
+            justify-content: center;
+            z-index: 100;
+            padding: 20px;
+        }
+
+        .modal-content {
+            background: var(--card-bg);
+            padding: 20px;
+            border-radius: 12px;
+            width: 100%;
+            max-width: 350px;
+            text-align: center;
+        }
 
         .loader { text-align: center; color: #888; font-size: 0.9em; margin-bottom: 10px; }
+        
+        .settings-link {
+            text-align: center;
+            margin-top: 30px;
+            font-size: 12px;
+            color: #555;
+            text-decoration: underline;
+            cursor: pointer;
+        }
     </style>
 </head>
 <body>
 
     <h2 id="monthTitle">Тренировки</h2>
-    <div id="status" class="loader">Загрузка данных...</div>
+    <div id="status" class="loader">Инициализация...</div>
     <div class="calendar-grid" id="calendar"></div>
+    
+    <div class="settings-link" onclick="resetToken()">Сбросить токен GitHub</div>
 
-    <div id="noteModal">
+    <div id="noteModal" class="modal">
         <div class="modal-content">
             <h3 id="modalDateTitle">Дата</h3>
-            <textarea id="noteInput" placeholder="Что делали сегодня?"></textarea>
-            <button id="saveBtn">Сохранить</button>
-            <button id="closeBtn">Закрыть</button>
+            <textarea id="noteInput" placeholder="Упражнения, веса, самочувствие..."></textarea>
+            <button class="btn-primary" id="saveNoteBtn">Сохранить</button>
+            <button class="btn-text" onclick="closeModal('noteModal')">Закрыть</button>
+        </div>
+    </div>
+
+    <div id="authModal" class="modal">
+        <div class="modal-content">
+            <h3>Настройка</h3>
+            <p style="font-size: 14px; color: #aaa; margin-bottom: 15px;">
+                Введи GitHub Token и имя репозитория, чтобы сохранять данные.
+            </p>
+            <input type="text" id="repoInput" placeholder="username/repository">
+            <input type="password" id="tokenInput" placeholder="ghp_xxxxxxxxxxxx">
+            <button class="btn-primary" onclick="saveAuth()">Войти</button>
         </div>
     </div>
 
     <script>
-        // --- КОНФИГУРАЦИЯ (ЗАПОЛНИ ЭТО) ---
-        const GITHUB_USERNAME = 'MrD00M666'; 
-        const REPO_NAME = 'Trening';     
-        const GITHUB_TOKEN = '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'; 
-        const FILE_NAME = 'workouts.json';
-        // ----------------------------------
-
         const tg = window.Telegram.WebApp;
-        tg.expand(); // Раскрыть на весь экран
+        tg.expand(); 
+        tg.enableClosingConfirmation(); // Спрашивать перед закрытием, если есть несохраненные данные
+
+        // Имена файлов и ключей
+        const FILE_NAME = 'workouts.json';
+        const STORAGE_KEY_TOKEN = 'gh_token';
+        const STORAGE_KEY_REPO = 'gh_repo';
 
         let workoutData = {};
-        let fileSha = null; // Нужен для обновления файла в GitHub
+        let fileSha = null; 
         let selectedDate = null;
-
-        const calendarEl = document.getElementById('calendar');
-        const modal = document.getElementById('noteModal');
-        const noteInput = document.getElementById('noteInput');
+        
+        // Элементы
         const statusEl = document.getElementById('status');
+        const noteModal = document.getElementById('noteModal');
+        const authModal = document.getElementById('authModal');
+        const noteInput = document.getElementById('noteInput');
 
-        // 1. Инициализация
+        // --- 1. Проверка авторизации ---
+        function checkAuth() {
+            const token = localStorage.getItem(STORAGE_KEY_TOKEN);
+            const repo = localStorage.getItem(STORAGE_KEY_REPO);
+
+            if (!token || !repo) {
+                authModal.style.display = 'flex';
+                return false;
+            }
+            return { token, repo };
+        }
+
+        // Сохранение токена в память телефона
+        function saveAuth() {
+            const repo = document.getElementById('repoInput').value.trim();
+            const token = document.getElementById('tokenInput').value.trim();
+
+            if (!repo || !token) {
+                alert("Заполните оба поля!");
+                return;
+            }
+            // Убираем слэши или пробелы, если юзер ошибся
+            localStorage.setItem(STORAGE_KEY_REPO, repo);
+            localStorage.setItem(STORAGE_KEY_TOKEN, token);
+            
+            authModal.style.display = 'none';
+            init(); // Повторный запуск
+        }
+
+        function resetToken() {
+            if(confirm('Удалить токен с устройства?')) {
+                localStorage.clear();
+                location.reload();
+            }
+        }
+
+        // --- 2. Логика приложения ---
         async function init() {
-            await loadFromGitHub();
+            const auth = checkAuth();
+            if (!auth) return; // Ждем ввода токена
+
+            await loadFromGitHub(auth);
             renderCalendar();
         }
 
-        // 2. Загрузка данных с GitHub
-        async function loadFromGitHub() {
-            statusEl.innerText = "Синхронизация с GitHub...";
-            const url = `https://api.github.com/repos/${GITHUB_USERNAME}/${REPO_NAME}/contents/${FILE_NAME}`;
+        async function loadFromGitHub({ token, repo }) {
+            statusEl.innerText = "Синхронизация...";
+            const url = `https://api.github.com/repos/${repo}/contents/${FILE_NAME}`;
             
             try {
                 const response = await fetch(url, {
-                    headers: { 'Authorization': `token ${GITHUB_TOKEN}` }
+                    headers: { 
+                        'Authorization': `token ${token}`,
+                        'Accept': 'application/vnd.github.v3+json'
+                    }
                 });
 
                 if (response.status === 404) {
-                    // Файла еще нет, создадим пустой объект
                     workoutData = {};
-                    console.log("Файл не найден, будет создан новый.");
-                } else {
+                    console.log("Файл не найден, начинаем с нуля.");
+                } else if (response.ok) {
                     const data = await response.json();
                     fileSha = data.sha;
-                    // Декодируем Base64 (с поддержкой кириллицы)
+                    // Декодируем UTF-8 корректно
                     const content = decodeURIComponent(escape(window.atob(data.content)));
                     workoutData = JSON.parse(content);
+                } else {
+                    throw new Error('Ошибка доступа. Проверь токен или имя репо.');
                 }
-                statusEl.innerText = "Данные загружены";
+                statusEl.innerText = "Готово";
             } catch (e) {
-                statusEl.innerText = "Ошибка загрузки!";
-                console.error(e);
+                statusEl.innerText = "Ошибка: " + e.message;
+                // Если ошибка авторизации - сбрасываем, чтобы дать ввести заново
+                if (e.message.includes('401') || e.message.includes('403')) {
+                     alert("Неверный токен или нет доступа к репо.");
+                }
             }
         }
 
-        // 3. Сохранение данных на GitHub
         async function saveToGitHub() {
+            const auth = checkAuth();
+            if (!auth) return;
+
             statusEl.innerText = "Сохранение...";
-            const url = `https://api.github.com/repos/${GITHUB_USERNAME}/${REPO_NAME}/contents/${FILE_NAME}`;
+            const url = `https://api.github.com/repos/${auth.repo}/contents/${FILE_NAME}`;
             
-            // Кодируем в Base64 (с поддержкой кириллицы)
+            // Кодируем UTF-8 для GitHub
             const content = window.btoa(unescape(encodeURIComponent(JSON.stringify(workoutData, null, 2))));
 
             const body = {
-                message: `Update via Telegram App: ${selectedDate}`,
+                message: `Workout: ${selectedDate}`,
                 content: content
             };
             
-            if (fileSha) {
-                body.sha = fileSha;
-            }
+            if (fileSha) body.sha = fileSha;
 
             try {
                 const response = await fetch(url, {
                     method: 'PUT',
                     headers: {
-                        'Authorization': `token ${GITHUB_TOKEN}`,
+                        'Authorization': `token ${auth.token}`,
                         'Content-Type': 'application/json'
                     },
                     body: JSON.stringify(body)
                 });
 
+                if (!response.ok) throw new Error('Failed to save');
+
                 const data = await response.json();
-                fileSha = data.content.sha; // Обновляем SHA
-                statusEl.innerText = "Сохранено!";
+                fileSha = data.content.sha;
+                statusEl.innerText = "Сохранено ✅";
                 setTimeout(() => statusEl.innerText = "", 2000);
             } catch (e) {
-                statusEl.innerText = "Ошибка сохранения!";
-                alert("Ошибка при сохранении в GitHub");
+                statusEl.innerText = "Ошибка сохранения ❌";
+                alert("Не удалось сохранить данные на GitHub.");
             }
         }
 
-        // 4. Отрисовка календаря (Текущий месяц)
+        // --- 3. Календарь ---
         function renderCalendar() {
+            const calendarEl = document.getElementById('calendar');
             calendarEl.innerHTML = '';
+            
             const now = new Date();
-            const daysInMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
-            const monthName = now.toLocaleString('ru-RU', { month: 'long' });
-            document.getElementById('monthTitle').innerText = capitalize(monthName);
+            const year = now.getFullYear();
+            const month = now.getMonth(); // 0-11
+            
+            // Название месяца
+            const monthNames = ["Январь", "Февраль", "Март", "Апрель", "Май", "Июнь", "Июль", "Август", "Сентябрь", "Октябрь", "Ноябрь", "Декабрь"];
+            document.getElementById('monthTitle').innerText = `${monthNames[month]} ${year}`;
+
+            const daysInMonth = new Date(year, month + 1, 0).getDate();
+            const today = now.getDate();
 
             for (let i = 1; i <= daysInMonth; i++) {
                 const dayEl = document.createElement('div');
                 dayEl.className = 'day';
                 dayEl.innerText = i;
                 
-                const dateKey = `${now.getFullYear()}-${now.getMonth() + 1}-${i}`;
+                // Формат ключа YYYY-M-D (без ведущих нулей для простоты)
+                const dateKey = `${year}-${month + 1}-${i}`;
                 
-                if (workoutData[dateKey]) {
-                    dayEl.classList.add('has-note');
-                }
+                if (workoutData[dateKey]) dayEl.classList.add('has-note');
+                if (i === today) dayEl.classList.add('today');
 
-                dayEl.onclick = () => openModal(dateKey, i);
+                dayEl.onclick = () => openNoteModal(dateKey, i);
                 calendarEl.appendChild(dayEl);
             }
         }
 
-        function openModal(dateKey, dayNum) {
+        // --- 4. Управление модалками ---
+        function openNoteModal(dateKey, dayNum) {
             selectedDate = dateKey;
-            document.getElementById('modalDateTitle').innerText = `Заметка на ${dayNum} число`;
+            document.getElementById('modalDateTitle').innerText = `Заметка: ${dayNum}`;
             noteInput.value = workoutData[dateKey] || '';
-            modal.style.display = 'flex';
+            noteModal.style.display = 'flex';
         }
 
-        document.getElementById('closeBtn').onclick = () => {
-            modal.style.display = 'none';
-        };
+        function closeModal(id) {
+            document.getElementById(id).style.display = 'none';
+        }
 
-        document.getElementById('saveBtn').onclick = async () => {
+        document.getElementById('saveNoteBtn').onclick = async () => {
             const text = noteInput.value.trim();
             if (text) {
                 workoutData[selectedDate] = text;
             } else {
                 delete workoutData[selectedDate];
             }
-            modal.style.display = 'none';
-            renderCalendar(); // Обновить вид (рамки)
-            await saveToGitHub(); // Отправить в облако
+            closeModal('noteModal');
+            renderCalendar();
+            await saveToGitHub();
         };
-
-        function capitalize(str) {
-            return str.charAt(0).toUpperCase() + str.slice(1);
-        }
 
         // Запуск
         init();
