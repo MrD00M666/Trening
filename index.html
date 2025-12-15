@@ -3,18 +3,20 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Workout Calendar</title>
+    <title>Workout Calendar Pro</title>
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <style>
         :root {
             --bg-color: #1c1c1e;
             --card-bg: #2c2c2e;
             --text-color: #ffffff;
+            --sub-text: #8e8e93;
             --accent-color: #007aff;
             --day-active: #3a3a3c;
             --day-has-note: #30d158;
             --btn-hover: #3a3a3c;
-            --weekday-color: #8e8e93;
+            --input-bg: #1c1c1e;
+            --border-color: #3a3a3c;
         }
 
         body {
@@ -25,6 +27,7 @@
             padding: 15px;
             user-select: none;
             -webkit-tap-highlight-color: transparent;
+            padding-bottom: 40px;
         }
 
         /* --- Навигация --- */
@@ -33,13 +36,12 @@
             justify-content: center;
             align-items: center;
             margin-bottom: 20px;
-            position: relative;
         }
 
         .header-nav {
             display: flex;
             align-items: center;
-            gap: 5px; /* Кнопки близко к названию */
+            gap: 5px;
             background: var(--card-bg);
             padding: 5px 10px;
             border-radius: 12px;
@@ -50,7 +52,7 @@
             font-size: 1.1rem;
             text-transform: capitalize;
             text-align: center;
-            min-width: 120px; /* Чтобы не дергалось при смене месяца */
+            min-width: 130px;
         }
 
         .nav-btn {
@@ -66,17 +68,16 @@
             justify-content: center;
         }
         
-        /* Кнопка года (отдельная слева в группе) */
         .year-btn {
             font-size: 1rem;
             font-weight: 600;
-            color: var(--weekday-color);
+            color: var(--sub-text);
             margin-right: 5px;
         }
 
         .nav-btn:active { background-color: var(--btn-hover); }
 
-        /* --- Дни недели --- */
+        /* --- Календарь --- */
         .weekdays {
             display: grid;
             grid-template-columns: repeat(7, 1fr);
@@ -86,12 +87,11 @@
         }
         
         .weekday {
-            color: var(--weekday-color);
+            color: var(--sub-text);
             font-size: 0.8rem;
             font-weight: 500;
         }
 
-        /* --- Сетка календаря --- */
         .calendar-grid {
             display: grid;
             grid-template-columns: repeat(7, 1fr);
@@ -112,30 +112,17 @@
             position: relative;
         }
 
-        .day.empty {
-            background-color: transparent;
-            cursor: default;
-        }
-
-        .day.today {
-            background-color: #48484a;
-            border: 1px solid #666;
-        }
-
-        .day.has-note {
-            border: 2px solid var(--day-has-note);
-            color: var(--day-has-note);
-        }
-
+        .day.empty { background: transparent; cursor: default; }
+        .day.today { background-color: #48484a; border: 1px solid #666; }
+        .day.has-note { border: 2px solid var(--day-has-note); color: var(--day-has-note); }
         .day:active:not(.empty) { transform: scale(0.95); }
 
-        /* --- Вид Года (список месяцев) --- */
+        /* --- Вид Года --- */
         .year-view {
-            display: none; /* Скрыто по умолчанию */
+            display: none;
             grid-template-columns: repeat(3, 1fr);
             gap: 10px;
         }
-
         .month-card {
             background-color: var(--card-bg);
             padding: 15px 5px;
@@ -143,36 +130,33 @@
             text-align: center;
             font-weight: 600;
             font-size: 0.9rem;
-            cursor: pointer;
             text-transform: capitalize;
         }
+        .month-card.current { border: 1px solid var(--accent-color); color: var(--accent-color); }
 
-        .month-card.current {
-            border: 1px solid var(--accent-color);
-            color: var(--accent-color);
-        }
-
-        .month-card:active { transform: scale(0.95); background: var(--btn-hover); }
-
-        /* --- Модальное окно --- */
+        /* --- Модальное окно (Карточка тренировки) --- */
         #noteModal {
             display: none;
             position: fixed;
             top: 0; left: 0; right: 0; bottom: 0;
-            background: rgba(0,0,0,0.8);
-            align-items: center;
-            justify-content: center;
+            background: rgba(0,0,0,0.85);
             z-index: 100;
-            backdrop-filter: blur(2px);
+            backdrop-filter: blur(4px);
+            overflow-y: auto; /* Скролл для длинных тренировок */
+            padding: 20px 0;
+            align-items: flex-start; /* Чтобы при скролле верх не обрезался */
+            justify-content: center;
         }
 
         .modal-content {
             background: var(--card-bg);
             padding: 20px;
-            border-radius: 14px;
-            width: 85%;
-            max-width: 320px;
-            box-shadow: 0 10px 25px rgba(0,0,0,0.5);
+            border-radius: 16px;
+            width: 90%;
+            max-width: 400px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+            margin: auto; 
+            position: relative;
         }
 
         .modal-header {
@@ -180,34 +164,97 @@
             justify-content: space-between;
             align-items: center;
             margin-bottom: 15px;
+            border-bottom: 1px solid var(--border-color);
+            padding-bottom: 10px;
         }
         
-        .modal-header h3 { margin: 0; font-size: 1.1rem; }
+        .modal-header h3 { margin: 0; font-size: 1.2rem; }
+        .modal-header span { color: var(--sub-text); font-size: 0.9rem; }
+
+        /* Список упражнений */
+        .exercise-list {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            margin-bottom: 20px;
+        }
+
+        .exercise-item {
+            background: var(--bg-color);
+            padding: 10px;
+            border-radius: 10px;
+        }
+
+        .ex-name {
+            font-size: 0.95rem;
+            font-weight: 600;
+            margin-bottom: 8px;
+            color: #fff;
+            display: block;
+        }
+
+        .ex-inputs {
+            display: grid;
+            grid-template-columns: 1fr 1fr 1fr;
+            gap: 8px;
+        }
+
+        .input-group {
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
+        }
+
+        .input-group label {
+            font-size: 0.7rem;
+            color: var(--sub-text);
+            text-align: center;
+        }
+
+        .ex-input {
+            background: #2c2c2e;
+            border: 1px solid var(--border-color);
+            color: white;
+            padding: 6px;
+            border-radius: 6px;
+            text-align: center;
+            font-size: 1rem;
+            outline: none;
+            width: 100%;
+            box-sizing: border-box;
+        }
+        .ex-input:focus { border-color: var(--accent-color); }
+
+        /* Общие заметки */
+        .notes-section label {
+            display: block;
+            margin-bottom: 5px;
+            color: var(--sub-text);
+            font-size: 0.9rem;
+        }
 
         textarea {
             width: 100%;
-            height: 120px;
-            background: #1c1c1e;
+            height: 80px;
+            background: var(--bg-color);
             color: #fff;
-            border: 1px solid #3a3a3c;
+            border: 1px solid var(--border-color);
             border-radius: 10px;
-            padding: 12px;
-            margin-bottom: 15px;
+            padding: 10px;
             resize: none;
             font-size: 16px;
             box-sizing: border-box;
             outline: none;
+            margin-bottom: 20px;
         }
 
-        textarea:focus { border-color: var(--accent-color); }
-
-        .btn-group { display: flex; gap: 10px; }
+        .btn-group { display: flex; gap: 10px; position: sticky; bottom: 0; background: var(--card-bg); padding-top: 10px; }
 
         button.action-btn {
             flex: 1;
-            padding: 12px;
+            padding: 14px;
             border: none;
-            border-radius: 10px;
+            border-radius: 12px;
             font-size: 16px;
             font-weight: 600;
             cursor: pointer;
@@ -218,10 +265,17 @@
 
         .loader { 
             text-align: center; 
-            color: #888; 
+            color: var(--sub-text); 
             font-size: 0.8rem; 
             height: 20px; 
             margin-bottom: 5px;
+        }
+
+        .rest-day-msg {
+            text-align: center;
+            color: var(--sub-text);
+            padding: 20px;
+            font-style: italic;
         }
     </style>
 </head>
@@ -230,7 +284,6 @@
     <div class="header-wrapper">
         <div class="header-nav">
             <button class="nav-btn year-btn" onclick="toggleViewMode()" id="yearBtn">2024</button>
-            
             <button class="nav-btn" onclick="changeMonth(-1)">&#10094;</button> 
             <h2 id="monthTitle" onclick="toggleViewMode()">...</h2>
             <button class="nav-btn" onclick="changeMonth(1)">&#10095;</button> 
@@ -258,10 +311,18 @@
         <div class="modal-content">
             <div class="modal-header">
                 <h3 id="modalDateTitle">Дата</h3>
+                <span id="dayNameTitle">День недели</span>
             </div>
-            <textarea id="noteInput" placeholder="Упражнение, вес, повторы..."></textarea>
+
+            <div id="exercisesContainer" class="exercise-list"></div>
+
+            <div class="notes-section">
+                <label>Дополнительные заметки:</label>
+                <textarea id="noteInput" placeholder="Самочувствие, комментарии..."></textarea>
+            </div>
+
             <div class="btn-group">
-                <button id="closeBtn" class="action-btn">Отмена</button>
+                <button id="closeBtn" class="action-btn">Закрыть</button>
                 <button id="saveBtn" class="action-btn">Сохранить</button>
             </div>
         </div>
@@ -271,26 +332,49 @@
         // --- КОНФИГУРАЦИЯ ---
         const DOC_ID = '57319602ea8e41138fb868b026aadc79';
         const API_URL = `https://api.jsoneditoronline.org/v2/docs/${DOC_ID}/data`;
-        // --------------------
+
+        // Расписание (0 - Воскресенье, 1 - Понедельник ... 6 - Суббота)
+        const WORKOUT_SCHEDULE = {
+            1: [ // Понедельник
+                "Жим ногами", "Тяга рычажная (спина)", "Шраги (трапеции)", 
+                "Махи (ср. дельта)", "Бабочка (зад. дельта)", "Французский жим", "Молотки (бицепс)"
+            ],
+            2: [ // Вторник
+                "Подтягивания", "Отжимания (ноги выше)", "Шея вперед", "Шея назад", "Кардио (зона 2)"
+            ],
+            3: [], // Среда (Отдых)
+            4: [ // Четверг
+                "Гиперэкстензия", "Тяга рычажная (спина)", "Шраги (трапеции)",
+                "Махи (ср. дельта)", "Бабочка (зад. дельта)", "Французский жим", "Бицепс"
+            ],
+            5: [ // Пятница
+                "Подтягивания", "Отжимания (ноги выше)", "Шея вперед", "Шея назад"
+            ],
+            6: [ // Суббота
+                "Интервальное кардио (бег)"
+            ],
+            0: [] // Воскресенье (Отдых)
+        };
 
         const tg = window.Telegram.WebApp;
         tg.expand(); 
 
-        // --- Состояние приложения ---
         let workoutData = {};
         let displayedDate = new Date(); 
-        let selectedDateKey = null;     
-        let isYearView = false; // Флаг режима просмотра
+        let selectedDateKey = null;      
+        let isYearView = false;
 
-        // Элементы
         const calendarEl = document.getElementById('calendar');
         const yearViewEl = document.getElementById('yearView');
         const calendarContainer = document.getElementById('calendarContainer');
         const modal = document.getElementById('noteModal');
         const noteInput = document.getElementById('noteInput');
+        const exercisesContainer = document.getElementById('exercisesContainer');
         const statusEl = document.getElementById('status');
         const monthTitle = document.getElementById('monthTitle');
         const yearBtn = document.getElementById('yearBtn');
+        const modalDateTitle = document.getElementById('modalDateTitle');
+        const dayNameTitle = document.getElementById('dayNameTitle');
 
         // --- 1. Работа с данными ---
 
@@ -335,10 +419,8 @@
 
         function changeMonth(offset) {
             if (isYearView) {
-                // В режиме года меняем год
                 displayedDate.setFullYear(displayedDate.getFullYear() + offset);
             } else {
-                // В обычном режиме меняем месяц
                 displayedDate.setMonth(displayedDate.getMonth() + offset);
             }
             render();
@@ -357,16 +439,14 @@
 
         function render() {
             const year = displayedDate.getFullYear();
-            yearBtn.innerText = year; // Обновляем кнопку с годом
+            yearBtn.innerText = year;
 
             if (isYearView) {
-                // Рендер режима года
                 calendarContainer.style.display = 'none';
                 yearViewEl.style.display = 'grid';
                 monthTitle.innerText = "Выберите месяц";
                 renderYearView();
             } else {
-                // Рендер режима месяца
                 calendarContainer.style.display = 'block';
                 yearViewEl.style.display = 'none';
                 
@@ -385,7 +465,6 @@
             for (let i = 0; i < 12; i++) {
                 const monthDiv = document.createElement('div');
                 monthDiv.className = 'month-card';
-                // Получаем название месяца
                 const name = new Date(displayYear, i).toLocaleString('ru-RU', { month: 'long' });
                 monthDiv.innerText = name;
 
@@ -400,28 +479,22 @@
 
         function renderCalendar() {
             calendarEl.innerHTML = '';
-            
             const year = displayedDate.getFullYear();
             const month = displayedDate.getMonth();
-            
-            // Сколько дней в месяце
             const daysInMonth = new Date(year, month + 1, 0).getDate();
             
-            // Определяем день недели 1-го числа (0 - пн, 6 - вс для корректного отображения)
+            // 0 = Пн ... 6 = Вс
             let firstDayIndex = new Date(year, month, 1).getDay();
-            // JS getDay(): 0 = Вс, 1 = Пн. Нам нужно: 0 = Пн ... 6 = Вс
             firstDayIndex = (firstDayIndex === 0) ? 6 : firstDayIndex - 1;
 
             const today = new Date();
 
-            // Добавляем пустые ячейки до 1-го числа
             for (let i = 0; i < firstDayIndex; i++) {
                 const emptyEl = document.createElement('div');
                 emptyEl.className = 'day empty';
                 calendarEl.appendChild(emptyEl);
             }
 
-            // Рисуем дни
             for (let i = 1; i <= daysInMonth; i++) {
                 const dayEl = document.createElement('div');
                 dayEl.className = 'day';
@@ -437,22 +510,75 @@
                     dayEl.classList.add('today');
                 }
 
-                dayEl.onclick = () => openModal(dateKey, i);
+                dayEl.onclick = () => openModal(dateKey, i, month, year);
                 calendarEl.appendChild(dayEl);
             }
         }
 
-        // --- 3. Модальное окно ---
+        // --- 3. Модальное окно и логика карточек ---
 
-        function openModal(dateKey, dayNum) {
+        function openModal(dateKey, dayNum, month, year) {
             selectedDateKey = dateKey;
-            const [y, m, d] = dateKey.split('-');
-            document.getElementById('modalDateTitle').innerText = `${d}.${m}.${y}`;
             
-            noteInput.value = workoutData[dateKey] || '';
+            // Определяем день недели (JS: 0-Вс, 1-Пн...)
+            const dateObj = new Date(year, month, dayNum);
+            const dayOfWeek = dateObj.getDay(); 
+            const dayNames = ["Воскресенье", "Понедельник", "Вторник", "Среда", "Четверг", "Пятница", "Суббота"];
+
+            modalDateTitle.innerText = `${dayNum}.${String(month + 1).padStart(2, '0')}.${year}`;
+            dayNameTitle.innerText = dayNames[dayOfWeek];
+
+            // Получаем существующие данные
+            let savedData = workoutData[dateKey];
+            let savedExercises = [];
+            let savedNote = "";
+
+            // Обратная совместимость со старым форматом (если была просто строка)
+            if (typeof savedData === 'string') {
+                savedNote = savedData;
+            } else if (savedData && typeof savedData === 'object') {
+                savedExercises = savedData.exercises || [];
+                savedNote = savedData.note || "";
+            }
+
+            noteInput.value = savedNote;
+            exercisesContainer.innerHTML = ''; // Очистка
+
+            // Получаем список упражнений по плану
+            const planExercises = WORKOUT_SCHEDULE[dayOfWeek];
+
+            if (planExercises && planExercises.length > 0) {
+                planExercises.forEach(exName => {
+                    // Ищем сохраненные значения для этого упражнения
+                    const savedEx = savedExercises.find(e => e.name === exName) || {};
+
+                    const exItem = document.createElement('div');
+                    exItem.className = 'exercise-item';
+                    
+                    exItem.innerHTML = `
+                        <span class="ex-name">${exName}</span>
+                        <div class="ex-inputs">
+                            <div class="input-group">
+                                <label>Вес (кг)</label>
+                                <input type="number" class="ex-input inp-weight" placeholder="0" value="${savedEx.weight || ''}">
+                            </div>
+                            <div class="input-group">
+                                <label>Повторы</label>
+                                <input type="number" class="ex-input inp-reps" placeholder="0" value="${savedEx.reps || ''}">
+                            </div>
+                            <div class="input-group">
+                                <label>Подходы</label>
+                                <input type="number" class="ex-input inp-sets" placeholder="0" value="${savedEx.sets || ''}">
+                            </div>
+                        </div>
+                    `;
+                    exercisesContainer.appendChild(exItem);
+                });
+            } else {
+                exercisesContainer.innerHTML = '<div class="rest-day-msg">Сегодня день отдыха или кардио без учета весов.<br>Можно просто оставить заметку ниже.</div>';
+            }
+
             modal.style.display = 'flex';
-            
-            setTimeout(() => noteInput.focus(), 100);
         }
 
         function closeModal() {
@@ -463,14 +589,44 @@
         document.getElementById('closeBtn').onclick = closeModal;
 
         document.getElementById('saveBtn').onclick = async () => {
-            const text = noteInput.value.trim();
-            if (text) {
-                workoutData[selectedDateKey] = text;
+            const noteText = noteInput.value.trim();
+            const exerciseItems = document.querySelectorAll('.exercise-item');
+            
+            let exercisesToSave = [];
+
+            // Собираем данные из инпутов
+            exerciseItems.forEach(item => {
+                const name = item.querySelector('.ex-name').innerText;
+                const weight = item.querySelector('.inp-weight').value;
+                const reps = item.querySelector('.inp-reps').value;
+                const sets = item.querySelector('.inp-sets').value;
+
+                // Сохраняем, если хоть что-то заполнено
+                if (weight || reps || sets) {
+                    exercisesToSave.push({
+                        name: name,
+                        weight: weight,
+                        reps: reps,
+                        sets: sets
+                    });
+                }
+            });
+
+            // Формируем объект для сохранения
+            const entry = {
+                exercises: exercisesToSave,
+                note: noteText
+            };
+
+            // Если есть данные или заметка - сохраняем, иначе удаляем ключ
+            if (exercisesToSave.length > 0 || noteText) {
+                workoutData[selectedDateKey] = entry;
             } else {
                 delete workoutData[selectedDateKey];
             }
+
             closeModal();
-            render(); // Обновить точки
+            render(); // Обновляем точки на календаре
             await saveData();
         };
 
@@ -480,9 +636,9 @@
 
         // --- Запуск ---
         async function init() {
-            render(); // Рисуем интерфейс
-            await loadData(); // Грузим данные
-            render(); // Перерисовываем с данными
+            render(); 
+            await loadData(); 
+            render(); 
         }
 
         init();
