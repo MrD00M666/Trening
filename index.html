@@ -142,9 +142,9 @@
             background: rgba(0,0,0,0.85);
             z-index: 100;
             backdrop-filter: blur(4px);
-            overflow-y: auto; /* Скролл для длинных тренировок */
+            overflow-y: auto;
             padding: 20px 0;
-            align-items: flex-start; /* Чтобы при скролле верх не обрезался */
+            align-items: flex-start;
             justify-content: center;
         }
 
@@ -195,7 +195,7 @@
 
         .ex-inputs {
             display: grid;
-            grid-template-columns: 1fr 1fr 1fr;
+            grid-template-columns: repeat(auto-fit, minmax(0, 1fr)); /* Авто-распределение колонок */
             gap: 8px;
         }
 
@@ -209,6 +209,9 @@
             font-size: 0.7rem;
             color: var(--sub-text);
             text-align: center;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
         }
 
         .ex-input {
@@ -339,21 +342,21 @@
                 "Жим ногами", "Тяга рычажная (спина)", "Шраги (трапеции)", 
                 "Махи (ср. дельта)", "Бабочка (зад. дельта)", "Французский жим", "Молотки (бицепс)"
             ],
-            2: [], // Вторник (Теперь отдых)
-            3: [ // Среда (Теперь тренировка дома + кардио)
+            2: [], // Вторник (Отдых)
+            3: [ // Среда
                 "Подтягивания", "Отжимания (ноги выше)", "Шея вперед", "Шея назад", "Кардио (зона 2)"
             ],
             4: [ // Четверг
                 "Гиперэкстензия", "Тяга рычажная (спина)", "Шраги (трапеции)",
                 "Махи (ср. дельта)", "Бабочка (зад. дельта)", "Французский жим", "Бицепс"
             ],
-            5: [ // Пятница
+            5: [], // Пятница (Теперь Отдых)
+            6: [ // Суббота (Перенесли упражнения с весом тела)
                 "Подтягивания", "Отжимания (ноги выше)", "Шея вперед", "Шея назад"
             ],
-            6: [ // Суббота
+            0: [ // Воскресенье (Интервальное кардио)
                 "Интервальное кардио (бег)"
-            ],
-            0: [] // Воскресенье (Отдых)
+            ] 
         };
 
         const tg = window.Telegram.WebApp;
@@ -361,7 +364,7 @@
 
         let workoutData = {};
         let displayedDate = new Date(); 
-        let selectedDateKey = null;      
+        let selectedDateKey = null;       
         let isYearView = false;
 
         const calendarEl = document.getElementById('calendar');
@@ -520,7 +523,6 @@
         function openModal(dateKey, dayNum, month, year) {
             selectedDateKey = dateKey;
             
-            // Определяем день недели (JS: 0-Вс, 1-Пн...)
             const dateObj = new Date(year, month, dayNum);
             const dayOfWeek = dateObj.getDay(); 
             const dayNames = ["Воскресенье", "Понедельник", "Вторник", "Среда", "Четверг", "Пятница", "Суббота"];
@@ -528,12 +530,10 @@
             modalDateTitle.innerText = `${dayNum}.${String(month + 1).padStart(2, '0')}.${year}`;
             dayNameTitle.innerText = dayNames[dayOfWeek];
 
-            // Получаем существующие данные
             let savedData = workoutData[dateKey];
             let savedExercises = [];
             let savedNote = "";
 
-            // Обратная совместимость со старым форматом
             if (typeof savedData === 'string') {
                 savedNote = savedData;
             } else if (savedData && typeof savedData === 'object') {
@@ -542,22 +542,51 @@
             }
 
             noteInput.value = savedNote;
-            exercisesContainer.innerHTML = ''; // Очистка
+            exercisesContainer.innerHTML = ''; 
 
-            // Получаем список упражнений по плану
             const planExercises = WORKOUT_SCHEDULE[dayOfWeek];
 
             if (planExercises && planExercises.length > 0) {
                 planExercises.forEach(exName => {
-                    // Ищем сохраненные значения для этого упражнения
                     const savedEx = savedExercises.find(e => e.name === exName) || {};
-
                     const exItem = document.createElement('div');
                     exItem.className = 'exercise-item';
-                    
-                    exItem.innerHTML = `
-                        <span class="ex-name">${exName}</span>
-                        <div class="ex-inputs">
+                    exItem.dataset.name = exName; // Для сохранения
+
+                    // --- Логика генерации полей ввода ---
+                    let inputsHTML = '';
+
+                    if (exName === "Кардио (зона 2)") {
+                        // Поля: Время, Скорость, Наклон
+                        inputsHTML = `
+                            <div class="input-group">
+                                <label>Время</label>
+                                <input type="text" class="ex-input inp-time" placeholder="мин" value="${savedEx.time || ''}">
+                            </div>
+                            <div class="input-group">
+                                <label>Скорость</label>
+                                <input type="number" step="0.1" class="ex-input inp-speed" placeholder="км/ч" value="${savedEx.speed || ''}">
+                            </div>
+                            <div class="input-group">
+                                <label>Наклон</label>
+                                <input type="number" class="ex-input inp-incline" placeholder="%" value="${savedEx.incline || ''}">
+                            </div>
+                        `;
+                    } else if (exName === "Интервальное кардио (бег)") {
+                        // Поля: Время интервала, Количество
+                        inputsHTML = `
+                            <div class="input-group">
+                                <label>Время инт.</label>
+                                <input type="text" class="ex-input inp-time" placeholder="мин" value="${savedEx.time || ''}">
+                            </div>
+                            <div class="input-group">
+                                <label>Кол-во</label>
+                                <input type="number" class="ex-input inp-count" placeholder="раз" value="${savedEx.count || ''}">
+                            </div>
+                        `;
+                    } else {
+                        // Стандартные поля: Вес, Повторы, Подходы
+                        inputsHTML = `
                             <div class="input-group">
                                 <label>Вес (кг)</label>
                                 <input type="number" class="ex-input inp-weight" placeholder="0" value="${savedEx.weight || ''}">
@@ -570,12 +599,14 @@
                                 <label>Подходы</label>
                                 <input type="number" class="ex-input inp-sets" placeholder="0" value="${savedEx.sets || ''}">
                             </div>
-                        </div>
-                    `;
+                        `;
+                    }
+                    
+                    exItem.innerHTML = `<span class="ex-name">${exName}</span><div class="ex-inputs">${inputsHTML}</div>`;
                     exercisesContainer.appendChild(exItem);
                 });
             } else {
-                exercisesContainer.innerHTML = '<div class="rest-day-msg">Сегодня день отдыха или кардио без учета весов.<br>Можно просто оставить заметку ниже.</div>';
+                exercisesContainer.innerHTML = '<div class="rest-day-msg">День отдыха!</div>';
             }
 
             modal.style.display = 'flex';
@@ -594,31 +625,49 @@
             
             let exercisesToSave = [];
 
-            // Собираем данные из инпутов
             exerciseItems.forEach(item => {
-                const name = item.querySelector('.ex-name').innerText;
-                const weight = item.querySelector('.inp-weight').value;
-                const reps = item.querySelector('.inp-reps').value;
-                const sets = item.querySelector('.inp-sets').value;
+                const name = item.dataset.name;
+                
+                // Проверяем какие инпуты есть внутри элемента
+                const inpWeight = item.querySelector('.inp-weight');
+                const inpReps = item.querySelector('.inp-reps');
+                const inpSets = item.querySelector('.inp-sets');
+                const inpTime = item.querySelector('.inp-time');
+                const inpSpeed = item.querySelector('.inp-speed');
+                const inpIncline = item.querySelector('.inp-incline');
+                const inpCount = item.querySelector('.inp-count');
 
-                // Сохраняем, если хоть что-то заполнено
-                if (weight || reps || sets) {
-                    exercisesToSave.push({
-                        name: name,
-                        weight: weight,
-                        reps: reps,
-                        sets: sets
-                    });
+                let entry = { name: name };
+                let hasData = false;
+
+                if (name === "Кардио (зона 2)") {
+                    if (inpTime && inpTime.value) entry.time = inpTime.value;
+                    if (inpSpeed && inpSpeed.value) entry.speed = inpSpeed.value;
+                    if (inpIncline && inpIncline.value) entry.incline = inpIncline.value;
+                    if (entry.time || entry.speed || entry.incline) hasData = true;
+
+                } else if (name === "Интервальное кардио (бег)") {
+                    if (inpTime && inpTime.value) entry.time = inpTime.value;
+                    if (inpCount && inpCount.value) entry.count = inpCount.value;
+                    if (entry.time || entry.count) hasData = true;
+
+                } else {
+                    if (inpWeight && inpWeight.value) entry.weight = inpWeight.value;
+                    if (inpReps && inpReps.value) entry.reps = inpReps.value;
+                    if (inpSets && inpSets.value) entry.sets = inpSets.value;
+                    if (entry.weight || entry.reps || entry.sets) hasData = true;
+                }
+
+                if (hasData) {
+                    exercisesToSave.push(entry);
                 }
             });
 
-            // Формируем объект для сохранения
             const entry = {
                 exercises: exercisesToSave,
                 note: noteText
             };
 
-            // Если есть данные или заметка - сохраняем, иначе удаляем ключ
             if (exercisesToSave.length > 0 || noteText) {
                 workoutData[selectedDateKey] = entry;
             } else {
@@ -626,7 +675,7 @@
             }
 
             closeModal();
-            render(); // Обновляем точки на календаре
+            render();
             await saveData();
         };
 
