@@ -203,6 +203,7 @@
             display: flex;
             flex-direction: column;
             gap: 2px;
+            position: relative;
         }
 
         .input-group label {
@@ -212,6 +213,16 @@
             white-space: nowrap;
             overflow: hidden;
             text-overflow: ellipsis;
+        }
+
+        /* --- НОВЫЙ СТИЛЬ ДЛЯ ПРОШЛЫХ ЗНАЧЕНИЙ --- */
+        .prev-val {
+            font-size: 0.75rem;
+            color: var(--day-has-note); /* Зеленый цвет */
+            text-align: center;
+            min-height: 14px; /* Чтобы занимало место даже если пусто, если нужно, или 0 */
+            margin-bottom: 1px;
+            font-weight: 600;
         }
 
         .ex-input {
@@ -364,7 +375,7 @@
 
         let workoutData = {};
         let displayedDate = new Date(); 
-        let selectedDateKey = null;       
+        let selectedDateKey = null;        
         let isYearView = false;
 
         const calendarEl = document.getElementById('calendar');
@@ -520,6 +531,28 @@
 
         // --- 3. Модальное окно и логика карточек ---
 
+        // Функция поиска последней записи упражнения до текущей даты
+        function getLastLog(currentDateKey, exName) {
+            // Получаем все даты, сортируем их
+            const allDates = Object.keys(workoutData).sort();
+            
+            // Нам нужны только даты, которые строго меньше текущей (были в прошлом)
+            const pastDates = allDates.filter(d => d < currentDateKey);
+
+            // Идем с конца (от самой свежей даты к старым)
+            for (let i = pastDates.length - 1; i >= 0; i--) {
+                const dKey = pastDates[i];
+                const dayData = workoutData[dKey];
+                
+                // Проверяем, есть ли упражнения в этот день
+                if (dayData && typeof dayData === 'object' && dayData.exercises) {
+                    const ex = dayData.exercises.find(e => e.name === exName);
+                    if (ex) return ex; // Нашли! Возвращаем объект данных
+                }
+            }
+            return null; // Ничего не нашли
+        }
+
         function openModal(dateKey, dayNum, month, year) {
             selectedDateKey = dateKey;
             
@@ -549,53 +582,62 @@
             if (planExercises && planExercises.length > 0) {
                 planExercises.forEach(exName => {
                     const savedEx = savedExercises.find(e => e.name === exName) || {};
+                    
+                    // --- ПОИСК ПРЕДЫДУЩЕГО РЕЗУЛЬТАТА ---
+                    const prevEx = getLastLog(dateKey, exName) || {};
+                    
                     const exItem = document.createElement('div');
                     exItem.className = 'exercise-item';
                     exItem.dataset.name = exName; // Для сохранения
 
-                    // --- Логика генерации полей ввода ---
+                    // --- Логика генерации полей ввода с учетом предыдущих значений ---
                     let inputsHTML = '';
 
                     if (exName === "Кардио (зона 2)") {
-                        // Поля: Время, Скорость, Наклон
                         inputsHTML = `
                             <div class="input-group">
+                                <div class="prev-val">${prevEx.time || ''}</div>
                                 <label>Время</label>
                                 <input type="text" class="ex-input inp-time" placeholder="мин" value="${savedEx.time || ''}">
                             </div>
                             <div class="input-group">
+                                <div class="prev-val">${prevEx.speed || ''}</div>
                                 <label>Скорость</label>
                                 <input type="number" step="0.1" class="ex-input inp-speed" placeholder="км/ч" value="${savedEx.speed || ''}">
                             </div>
                             <div class="input-group">
+                                <div class="prev-val">${prevEx.incline || ''}</div>
                                 <label>Наклон</label>
                                 <input type="number" class="ex-input inp-incline" placeholder="%" value="${savedEx.incline || ''}">
                             </div>
                         `;
                     } else if (exName === "Интервальное кардио (бег)") {
-                        // Поля: Время интервала, Количество
                         inputsHTML = `
                             <div class="input-group">
+                                <div class="prev-val">${prevEx.time || ''}</div>
                                 <label>Время инт.</label>
                                 <input type="text" class="ex-input inp-time" placeholder="мин" value="${savedEx.time || ''}">
                             </div>
                             <div class="input-group">
+                                <div class="prev-val">${prevEx.count || ''}</div>
                                 <label>Кол-во</label>
                                 <input type="number" class="ex-input inp-count" placeholder="раз" value="${savedEx.count || ''}">
                             </div>
                         `;
                     } else {
-                        // Стандартные поля: Вес, Повторы, Подходы
                         inputsHTML = `
                             <div class="input-group">
+                                <div class="prev-val">${prevEx.weight || ''}</div>
                                 <label>Вес (кг)</label>
                                 <input type="number" class="ex-input inp-weight" placeholder="0" value="${savedEx.weight || ''}">
                             </div>
                             <div class="input-group">
+                                <div class="prev-val">${prevEx.reps || ''}</div>
                                 <label>Повторы</label>
                                 <input type="number" class="ex-input inp-reps" placeholder="0" value="${savedEx.reps || ''}">
                             </div>
                             <div class="input-group">
+                                <div class="prev-val">${prevEx.sets || ''}</div>
                                 <label>Подходы</label>
                                 <input type="number" class="ex-input inp-sets" placeholder="0" value="${savedEx.sets || ''}">
                             </div>
@@ -628,7 +670,6 @@
             exerciseItems.forEach(item => {
                 const name = item.dataset.name;
                 
-                // Проверяем какие инпуты есть внутри элемента
                 const inpWeight = item.querySelector('.inp-weight');
                 const inpReps = item.querySelector('.inp-reps');
                 const inpSets = item.querySelector('.inp-sets');
