@@ -113,6 +113,17 @@
         .day.empty { background: transparent; cursor: default; }
         .day.today { background-color: #48484a; border: 1px solid #666; }
         .day.has-note { border: 2px solid var(--day-has-note); color: var(--day-has-note); }
+        .day.has-note.workout-b::after {
+            content: '';
+            position: absolute;
+            left: 50%;
+            bottom: 7px;
+            transform: translateX(-50%);
+            width: 14px;
+            height: 2px;
+            border-radius: 2px;
+            background-color: var(--day-has-note);
+        }
         .day:active:not(.empty) { transform: scale(0.95); }
 
         .year-view {
@@ -531,6 +542,11 @@
                 
                 if (workoutData[dateKey]) {
                     dayEl.classList.add('has-note');
+
+                    const dateObj = new Date(year, month, i);
+                    if (getCycleIndex(dateObj) === 2) {
+                        dayEl.classList.add('workout-b');
+                    }
                 }
 
                 if (year === today.getFullYear() && month === today.getMonth() && i === today.getDate()) {
