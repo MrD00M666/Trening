@@ -180,34 +180,40 @@
             border-radius: 10px;
         }
 
+        .exercise-top {
+            display: flex;
+            align-items: flex-start;
+            justify-content: space-between;
+            gap: 12px;
+            margin-bottom: 10px;
+        }
+
         .ex-name {
             font-size: 0.95rem;
             font-weight: 600;
-            margin-bottom: 8px;
             color: #fff;
             display: block;
+            line-height: 1.3;
+            padding-top: 20px;
         }
 
-        .ex-inputs {
-            display: grid;
-            grid-template-columns: repeat(3, 1fr);
-            gap: 8px;
+        .weight-group {
+            width: 105px;
+            flex-shrink: 0;
         }
 
-        .input-group {
-            display: flex;
-            flex-direction: column;
-            gap: 2px;
-            position: relative;
-        }
-
-        .input-group label {
-            font-size: 0.7rem;
+        .weight-group label,
+        .exercise-note-label,
+        .notes-section label {
+            display: block;
+            margin-bottom: 5px;
             color: var(--sub-text);
+            font-size: 0.9rem;
+        }
+
+        .weight-group label {
             text-align: center;
-            white-space: nowrap;
-            overflow: hidden;
-            text-overflow: ellipsis;
+            font-size: 0.75rem;
         }
 
         .prev-val {
@@ -223,7 +229,7 @@
             background: #2c2c2e;
             border: 1px solid var(--border-color);
             color: white;
-            padding: 6px;
+            padding: 8px 6px;
             border-radius: 6px;
             text-align: center;
             font-size: 1rem;
@@ -231,14 +237,8 @@
             width: 100%;
             box-sizing: border-box;
         }
-        .ex-input:focus { border-color: var(--accent-color); }
-
-        .notes-section label {
-            display: block;
-            margin-bottom: 5px;
-            color: var(--sub-text);
-            font-size: 0.9rem;
-        }
+        .ex-input:focus,
+        textarea:focus { border-color: var(--accent-color); }
 
         textarea {
             width: 100%;
@@ -253,6 +253,14 @@
             box-sizing: border-box;
             outline: none;
             margin-bottom: 20px;
+        }
+
+        .exercise-note {
+            margin-bottom: 0;
+        }
+
+        #noteInput {
+            height: 110px;
         }
 
         .btn-group { display: flex; gap: 10px; position: sticky; bottom: 0; background: var(--card-bg); padding-top: 10px; }
@@ -347,11 +355,11 @@
         const WORKOUT_CYCLES = [
             [ // A
                 "Подтягивания", "Отжимания (ноги выше)", "Шея вперед", "Шея назад",
-                "Шея боковые", "Предплечья верх", "Предплечья вниз", "Гиперэкстензия", "Жим вверх плечи"
+                "Шея боковые", "Предплечья верх", "Предплечья вниз", "Гиперэкстензия", "Шраги (трапеции)"
             ],
             [], // Отдых
             [ // B
-                "Жим ногами", "Тяга рычажная (спина)", "Шраги (трапеции)",
+                "Жим ногами", "Тяга рычажная (спина)", "Жим вверх плечи",
                 "Махи (ср. дельта)", "Бабочка (зад. дельта)", "Французский жим", "Бицепс"
             ],
             []  // Отдых
@@ -552,6 +560,16 @@
             return null;
         }
 
+        function escapeHTML(value) {
+            return String(value ?? '').replace(/[&<>"']/g, char => ({
+                '&': '&amp;',
+                '<': '&lt;',
+                '>': '&gt;',
+                '"': '&quot;',
+                "'": '&#39;'
+            }[char]));
+        }
+
         function openModal(dateKey, dayNum, month, year) {
             selectedDateKey = dateKey;
             
@@ -585,25 +603,21 @@
                     exItem.className = 'exercise-item';
                     exItem.dataset.name = exName;
 
+                    const exerciseNote = savedEx.note || savedEx.exerciseNote || '';
                     const inputsHTML = `
-                        <div class="input-group">
-                            <div class="prev-val">${prevEx.weight || ''}</div>
-                            <label>Вес (кг)</label>
-                            <input type="number" class="ex-input inp-weight" placeholder="0" value="${savedEx.weight || ''}">
+                        <div class="exercise-top">
+                            <span class="ex-name">${escapeHTML(exName)}</span>
+                            <div class="weight-group">
+                                <div class="prev-val">${escapeHTML(prevEx.weight || '')}</div>
+                                <label>Вес (кг)</label>
+                                <input type="number" class="ex-input inp-weight" placeholder="0" value="${escapeHTML(savedEx.weight || '')}">
+                            </div>
                         </div>
-                        <div class="input-group">
-                            <div class="prev-val">${prevEx.reps || ''}</div>
-                            <label>Повторы</label>
-                            <input type="number" class="ex-input inp-reps" placeholder="0" value="${savedEx.reps || ''}">
-                        </div>
-                        <div class="input-group">
-                            <div class="prev-val">${prevEx.sets || ''}</div>
-                            <label>Подходы</label>
-                            <input type="number" class="ex-input inp-sets" placeholder="0" value="${savedEx.sets || ''}">
-                        </div>
+                        <label class="exercise-note-label">Заметки:</label>
+                        <textarea class="exercise-note inp-ex-note" placeholder="Техника, ощущения, комментарии...">${escapeHTML(exerciseNote)}</textarea>
                     `;
                     
-                    exItem.innerHTML = `<span class="ex-name">${exName}</span><div class="ex-inputs">${inputsHTML}</div>`;
+                    exItem.innerHTML = inputsHTML;
                     exercisesContainer.appendChild(exItem);
                 });
             } else {
@@ -629,16 +643,16 @@
             exerciseItems.forEach(item => {
                 const name = item.dataset.name;
                 const inpWeight = item.querySelector('.inp-weight');
-                const inpReps = item.querySelector('.inp-reps');
-                const inpSets = item.querySelector('.inp-sets');
+                const inpExNote = item.querySelector('.inp-ex-note');
 
                 let entry = { name };
                 let hasData = false;
+                const weight = inpWeight ? inpWeight.value.trim() : '';
+                const exerciseNote = inpExNote ? inpExNote.value.trim() : '';
 
-                if (inpWeight && inpWeight.value) entry.weight = inpWeight.value;
-                if (inpReps && inpReps.value) entry.reps = inpReps.value;
-                if (inpSets && inpSets.value) entry.sets = inpSets.value;
-                if (entry.weight || entry.reps || entry.sets) hasData = true;
+                if (weight) entry.weight = weight;
+                if (exerciseNote) entry.note = exerciseNote;
+                if (entry.weight || entry.note) hasData = true;
 
                 if (hasData) exercisesToSave.push(entry);
             });
