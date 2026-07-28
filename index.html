@@ -113,7 +113,8 @@
         .day.empty { background: transparent; cursor: default; }
         .day.today { background-color: #48484a; border: 1px solid #666; }
         .day.has-note { border: 2px solid var(--day-has-note); color: var(--day-has-note); }
-        .day.has-note.workout-b::after {
+        /* Подчеркивание — заловые дни (Пн и Пт) с записью */
+        .day.has-note.gym-day::after {
             content: '';
             position: absolute;
             left: 50%;
@@ -220,7 +221,7 @@
             padding: 5px 0;
             border-bottom: 1px solid var(--border-color);
         }
-        .pw-row.last { border-bottom: none; }
+        .pw-row.no-border { border-bottom: none; }
 
         .pw-ex-name { color: #fff; line-height: 1.3; }
         .pw-ex-weight {
@@ -236,7 +237,7 @@
             padding: 2px 0 6px;
             border-bottom: 1px solid var(--border-color);
         }
-        .pw-ex-note.last { border-bottom: none; }
+        .pw-ex-note.no-border { border-bottom: none; }
 
         .pw-note {
             color: var(--sub-text);
@@ -435,37 +436,78 @@
         const DOC_ID = '57319602ea8e41138fb868b026aadc79';
         const API_URL = `https://api.jsoneditoronline.org/v2/docs/${DOC_ID}/data`;
 
-        // Дата начала цикла — скорректируй под первый день тренировки A
-        const CYCLE_START_DATE = new Date('2025-03-17');
+        // Дата перехода на недельное расписание.
+        // Дни ДО этой даты живут по старому 4-дневному циклу (A/отдых/B/отдых),
+        // чтобы старые записи в календаре и модалке отображались корректно.
+        const WEEKLY_SCHEDULE_START = '2026-07-27'; // понедельник этой недели — скорректируй при необходимости
 
-        // Цикл: A → отдых → B → отдых → повтор
+        // --- Новое недельное расписание ---
+        // Индекс = getDay(): 0 = Вс, 1 = Пн ... 6 = Сб
+        const WEEKLY_SCHEDULE = [
+            { label: "Отдых",            gym: false, exercises: [] },                                                        // Вс
+            { label: "Зал",              gym: true,  exercises: ["Горизонтальная тяга", "Жим ногами", "Бабочка"] },          // Пн
+            { label: "Дом",              gym: false, exercises: ["Шея", "Махи"] },                                           // Вт
+            { label: "Дом",              gym: false, exercises: ["Подтягивания"] },                                          // Ср
+            { label: "Дом",              gym: false, exercises: ["Предплечья", "Шея", "Отжимания"] },                        // Чт
+            { label: "Зал",              gym: true,  exercises: ["Задняя дельта", "Бицепс бедра", "Шраги", "Бабочка"] },     // Пт
+            { label: "Дом",              gym: false, exercises: ["Бицепс", "Французский жим", "Махи"] }                      // Сб
+        ];
+
+        // Соответствие новых названий старым — чтобы зеленые "прошлые веса"
+        // подтягивались из записей, сделанных при старом расписании.
+        // Правь свободно: ключ — новое имя, значение — массив старых имен.
+        const EXERCISE_ALIASES = {
+            "Горизонтальная тяга": ["Тяга рычажная (спина)"],
+            "Бабочка":             [],                          // в старом плане "Бабочка (зад. дельта)" — это задняя дельта, НЕ грудная бабочка
+            "Задняя дельта":       ["Бабочка (зад. дельта)"],
+            "Махи":                ["Махи (ср. дельта)"],
+            "Отжимания":           ["Отжимания (ноги выше)"],
+            "Шраги":               ["Шраги (трапеции)"],
+            "Шея":                 [],                          // старые "Шея вперед/назад/боковые" — три разных упражнения, автоматически не сводятся
+            "Предплечья":          []                           // аналогично: "Предплечья верх/вниз"
+        };
+
+        // --- Старое расписание (для дат до WEEKLY_SCHEDULE_START) ---
+        const CYCLE_START_DATE = new Date(2025, 2, 17); // 17.03.2025, локальное время
         const WORKOUT_CYCLES = [
-            [ // A
+            [
                 "Подтягивания", "Отжимания (ноги выше)", "Шея вперед", "Шея назад",
                 "Шея боковые", "Предплечья верх", "Предплечья вниз", "Гиперэкстензия", "Шраги (трапеции)"
             ],
-            [], // Отдых
-            [ // B
+            [],
+            [
                 "Жим ногами", "Тяга рычажная (спина)", "Жим вверх плечи",
                 "Махи (ср. дельта)", "Бабочка (зад. дельта)", "Французский жим", "Бицепс"
             ],
-            []  // Отдых
+            []
         ];
-
         const CYCLE_LABELS = ["Тренировка A", "Отдых", "Тренировка B", "Отдых"];
 
-        // Парсим ключ 'YYYY-MM-DD' в ЛОКАЛЬНУЮ дату.
-        // Важно: new Date('YYYY-MM-DD') дал бы UTC-полночь, что при смещении
-        // часового пояса может уехать на соседний день и сломать расчет цикла.
+        const WEEKDAY_NAMES = ["Воскресенье", "Понедельник", "Вторник", "Среда", "Четверг", "Пятница", "Суббота"];
+
+        // --- Вспомогательные функции дат ---
+
+        // Ключ 'YYYY-MM-DD' → локальная дата. new Date('YYYY-MM-DD') дал бы
+        // UTC-полночь и мог бы сдвинуть день недели при смещении пояса.
         function parseDateKey(key) {
             const [y, m, d] = key.split('-').map(Number);
             return new Date(y, m - 1, d);
+        }
+
+        function toDateKey(dateObj) {
+            return `${dateObj.getFullYear()}-${String(dateObj.getMonth() + 1).padStart(2, '0')}-${String(dateObj.getDate()).padStart(2, '0')}`;
         }
 
         function formatDateKey(key) {
             const [y, m, d] = key.split('-');
             return `${d}.${m}.${y}`;
         }
+
+        function isWeeklySchedule(dateKey) {
+            return dateKey >= WEEKLY_SCHEDULE_START;
+        }
+
+        // --- Логика старого цикла (только для старых дат) ---
 
         function getCycleIndex(dateObj) {
             const start = new Date(CYCLE_START_DATE);
@@ -476,12 +518,27 @@
             return ((diffDays % 4) + 4) % 4;
         }
 
-        function getWorkoutForDate(dateObj) {
-            return WORKOUT_CYCLES[getCycleIndex(dateObj)];
-        }
+        // --- Единая точка: план и подпись для любой даты ---
 
-        function getWorkoutLabel(dateObj) {
-            return CYCLE_LABELS[getCycleIndex(dateObj)];
+        function getPlanForKey(dateKey) {
+            const dateObj = parseDateKey(dateKey);
+            if (isWeeklySchedule(dateKey)) {
+                const day = WEEKLY_SCHEDULE[dateObj.getDay()];
+                return {
+                    exercises: day.exercises,
+                    label: `${WEEKDAY_NAMES[dateObj.getDay()]} · ${day.label}`,
+                    gym: day.gym,
+                    weekly: true
+                };
+            } else {
+                const idx = getCycleIndex(dateObj);
+                return {
+                    exercises: WORKOUT_CYCLES[idx],
+                    label: CYCLE_LABELS[idx],
+                    gym: idx === 2,
+                    weekly: false
+                };
+            }
         }
 
         const tg = window.Telegram.WebApp;
@@ -633,10 +690,8 @@
                 
                 if (workoutData[dateKey]) {
                     dayEl.classList.add('has-note');
-
-                    const dateObj = new Date(year, month, i);
-                    if (getCycleIndex(dateObj) === 2) {
-                        dayEl.classList.add('workout-b');
+                    if (getPlanForKey(dateKey).gym) {
+                        dayEl.classList.add('gym-day');
                     }
                 }
 
@@ -651,52 +706,64 @@
 
         // --- 3. Прошлая тренировка ---
 
-        // Достаем заметку упражнения независимо от формата записи
-        // (в старых записях поле могло называться exerciseNote)
         function getExNote(ex) {
             return ex.note || ex.exerciseNote || '';
         }
 
-        // Ищем последнюю тренировку того же типа ДО указанной даты.
-        // Подводные камни старой базы:
-        //  1) Запись может быть строкой (совсем старый формат — только заметка).
-        //  2) Запись-объект может не иметь exercises или иметь пустой массив.
-        //  3) Дата начала цикла могла корректироваться, поэтому расчетный индекс
-        //     цикла для старых дат не гарантирован. Надежнее сверять по составу
-        //     упражнений: если сохраненные упражнения пересекаются с текущим
-        //     планом — это тренировка того же типа.
-        function getLastSameWorkout(currentDateKey) {
-            const dateObj = parseDateKey(currentDateKey);
-            const currentPlan = getWorkoutForDate(dateObj);
-            if (!currentPlan || currentPlan.length === 0) return null; // день отдыха
+        // Набор имен, под которыми упражнение могло быть записано раньше
+        function getNameVariants(exName) {
+            return [exName, ...(EXERCISE_ALIASES[exName] || [])];
+        }
 
-            const currentCycle = getCycleIndex(dateObj);
+        function findExerciseInEntry(entry, exName) {
+            if (!entry || typeof entry !== 'object' || !Array.isArray(entry.exercises)) return null;
+            const variants = getNameVariants(exName);
+            return entry.exercises.find(e => variants.includes(e.name)) || null;
+        }
+
+        // Последняя тренировка того же типа ДО указанной даты.
+        // Для недельного расписания "тот же тип" = тот же день недели.
+        // Подводные камни:
+        //  1) Первое время предыдущего "такого же" дня по новому расписанию
+        //     еще нет — тогда fallback: последний день, чьи упражнения
+        //     пересекаются с текущим планом (с учетом алиасов старых имен).
+        //  2) Записи старого формата: строка вместо объекта, exerciseNote
+        //     вместо note, отсутствие exercises — все обрабатывается.
+        function getLastSameWorkout(currentDateKey) {
+            const plan = getPlanForKey(currentDateKey);
+            if (!plan.exercises || plan.exercises.length === 0) return null; // день отдыха
+
             const pastDates = Object.keys(workoutData)
                 .filter(d => d < currentDateKey)
                 .sort();
 
+            const targetWeekday = parseDateKey(currentDateKey).getDay();
+
+            // 1-й проход: тот же день недели (только среди дат нового расписания)
+            for (let i = pastDates.length - 1; i >= 0; i--) {
+                const dKey = pastDates[i];
+                if (!isWeeklySchedule(dKey)) break; // дальше только старый цикл
+                if (parseDateKey(dKey).getDay() === targetWeekday && workoutData[dKey]) {
+                    return { dateKey: dKey, data: workoutData[dKey] };
+                }
+            }
+
+            // 2-й проход (fallback): последний день с пересечением по упражнениям
+            const variantSet = new Set(plan.exercises.flatMap(getNameVariants));
             for (let i = pastDates.length - 1; i >= 0; i--) {
                 const dKey = pastDates[i];
                 const entry = workoutData[dKey];
-                if (!entry) continue;
-
-                if (typeof entry === 'object' && Array.isArray(entry.exercises) && entry.exercises.length > 0) {
-                    // Основной критерий — пересечение по упражнениям
-                    const sameType = entry.exercises.some(e => currentPlan.includes(e.name));
-                    if (sameType) return { dateKey: dKey, data: entry };
-                } else {
-                    // Строка или запись без упражнений — сверяем по циклу
-                    if (getCycleIndex(parseDateKey(dKey)) === currentCycle) {
-                        return { dateKey: dKey, data: entry };
-                    }
+                if (entry && typeof entry === 'object' && Array.isArray(entry.exercises) &&
+                    entry.exercises.some(e => variantSet.has(e.name))) {
+                    return { dateKey: dKey, data: entry };
                 }
             }
+
             return null;
         }
 
         function buildPrevWorkoutHTML(pw) {
-            const pwDate = parseDateKey(pw.dateKey);
-            let html = `<div class="pw-date">${formatDateKey(pw.dateKey)} — ${escapeHTML(getWorkoutLabel(pwDate))}</div>`;
+            let html = `<div class="pw-date">${formatDateKey(pw.dateKey)} — ${escapeHTML(getPlanForKey(pw.dateKey).label)}</div>`;
             const data = pw.data;
 
             // Совсем старый формат: запись — просто строка-заметка
@@ -716,13 +783,12 @@
                 const isLast = idx === exercises.length - 1;
                 const note = getExNote(ex);
                 const weightStr = ex.weight ? `${escapeHTML(ex.weight)} кг` : '—';
-                // Если у упражнения есть заметка, нижнюю границу рисуем под ней
-                html += `<div class="pw-row${(isLast && !note) ? ' last' : ''}${note ? ' pw-has-note' : ''}" ${note ? 'style="border-bottom:none;"' : ''}>
+                html += `<div class="pw-row${(isLast && !note) || note ? ' no-border' : ''}">
                             <span class="pw-ex-name">${escapeHTML(ex.name)}</span>
                             <span class="pw-ex-weight">${weightStr}</span>
                          </div>`;
                 if (note) {
-                    html += `<div class="pw-ex-note${isLast ? ' last' : ''}">${escapeHTML(note)}</div>`;
+                    html += `<div class="pw-ex-note${isLast ? ' no-border' : ''}">${escapeHTML(note)}</div>`;
                 }
             });
 
@@ -755,7 +821,6 @@
                     prevWorkoutPanel.style.display = 'none';
                     prevWorkoutBtn.innerText = `Прошлая тренировка (${dateLabel}) ▾`;
                 } else {
-                    // Строим содержимое лениво, при первом открытии
                     if (!prevWorkoutPanel.innerHTML) {
                         prevWorkoutPanel.innerHTML = buildPrevWorkoutHTML(pw);
                     }
@@ -767,18 +832,15 @@
 
         // --- 4. Модальное окно ---
 
+        // Последняя запись данного упражнения (с учетом старых названий)
         function getLastLog(currentDateKey, exName) {
-            const allDates = Object.keys(workoutData).sort();
-            const pastDates = allDates.filter(d => d < currentDateKey);
+            const pastDates = Object.keys(workoutData)
+                .filter(d => d < currentDateKey)
+                .sort();
 
             for (let i = pastDates.length - 1; i >= 0; i--) {
-                const dKey = pastDates[i];
-                const dayData = workoutData[dKey];
-                
-                if (dayData && typeof dayData === 'object' && dayData.exercises) {
-                    const ex = dayData.exercises.find(e => e.name === exName);
-                    if (ex) return ex;
-                }
+                const ex = findExerciseInEntry(workoutData[pastDates[i]], exName);
+                if (ex) return ex;
             }
             return null;
         }
@@ -795,11 +857,11 @@
 
         function openModal(dateKey, dayNum, month, year) {
             selectedDateKey = dateKey;
-            
-            const dateObj = new Date(year, month, dayNum);
+
+            const plan = getPlanForKey(dateKey);
 
             modalDateTitle.innerText = `${dayNum}.${String(month + 1).padStart(2, '0')}.${year}`;
-            dayNameTitle.innerText = getWorkoutLabel(dateObj);
+            dayNameTitle.innerText = plan.label;
 
             // Кнопка "Прошлая тренировка" (всегда сброшена в закрытое состояние)
             setupPrevWorkoutUI(dateKey);
@@ -818,11 +880,20 @@
             noteInput.value = savedNote;
             exercisesContainer.innerHTML = ''; 
 
-            const planExercises = getWorkoutForDate(dateObj);
+            // Если в этот день уже есть сохраненные упражнения, которых нет
+            // в текущем плане (записаны при старом расписании) — показываем
+            // и их тоже, чтобы данные не "исчезли" из интерфейса.
+            let planExercises = (plan.exercises || []).slice();
+            const planVariantSet = new Set(planExercises.flatMap(getNameVariants));
+            savedExercises.forEach(e => {
+                if (!planVariantSet.has(e.name) && !planExercises.includes(e.name)) {
+                    planExercises.push(e.name);
+                }
+            });
 
-            if (planExercises && planExercises.length > 0) {
+            if (planExercises.length > 0) {
                 planExercises.forEach(exName => {
-                    const savedEx = savedExercises.find(e => e.name === exName) || {};
+                    const savedEx = findExerciseInEntry({ exercises: savedExercises }, exName) || {};
                     const prevEx = getLastLog(dateKey, exName) || {};
                     
                     const exItem = document.createElement('div');
